@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { prisma } from '@/lib/prisma';
-import { put } from '@vercel/blob';
-import { extractTextFromPDF } from '@/utils/pdfUtils';
+import { uploadToBlob } from '@/utils/blob';
+import { rateLimiter } from '@/middleware/rateLimiter';
 
 export async function GET(req: Request) {
   try {
@@ -31,51 +31,42 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // Check rate limit
+    const rateLimitResult = await rateLimiter(req as any);
+    if (rateLimitResult) return rateLimitResult;
+
     const { userId } = auth();
     if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
-
+    
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Add token to blob upload
-    const blob = await put(`documents/${userId}/${Date.now()}-${file.name}`, file, {
-      access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    // Upload to blob storage
+    const blob = await uploadToBlob(file);
 
-    let content = '';
-    if (file.type === 'application/pdf') {
-      content = await extractTextFromPDF(file);
-    } else {
-      content = await file.text();
-    }
-
-    // Create new document
+    // Save document metadata to database
     const document = await prisma.document.create({
       data: {
         userId,
         name: file.name,
-        content,
-        fileUrl: blob.url,
         fileType: file.type,
+        fileUrl: blob.url,
+        size: file.size,
       },
     });
 
-    return NextResponse.json({
-      status: 'success',
-      documentId: document.id,
-      fileUrl: blob.url,
-      content,
-    });
-
+    return NextResponse.json({ document });
   } catch (error) {
     console.error('Save document error:', error);
-    return NextResponse.json({ error: 'Failed to save document' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to save document' },
+      { status: 500 }
+    );
   }
 } 

@@ -1,112 +1,75 @@
 "use client";
 
 import { useState } from 'react';
+import { modelConfigs, ModelProvider } from '@/utils/modelConfig';
 import { motion } from 'framer-motion';
-import { modelConfigs, ModelProvider } from '@/utils/modelProvider';
-import ApiKeyManager from './ApiKeyManager';
-import { toast } from 'react-hot-toast';
 
 interface ModelSelectorProps {
-  onModelChange: (provider: ModelProvider, model: string) => void;
-  currentProvider: ModelProvider;
-  currentModel: string;
+  onModelSelect: (provider: ModelProvider, model: string) => void;
+  selectedProvider?: ModelProvider;
+  selectedModel?: string;
 }
 
-export default function ModelSelector({
-  onModelChange,
-  currentProvider,
-  currentModel,
+export default function ModelSelector({ 
+  onModelSelect, 
+  selectedProvider = 'openai',
+  selectedModel = 'gpt-4'
 }: ModelSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showApiKeys, setShowApiKeys] = useState(false);
+  const [provider, setProvider] = useState<ModelProvider>(selectedProvider);
+  const [model, setModel] = useState(selectedModel);
 
-  const handleApiKeySave = async (provider: ModelProvider, key: string) => {
-    try {
-      const response = await fetch('/api/validate-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, key }),
-      });
+  const handleProviderChange = (newProvider: ModelProvider) => {
+    setProvider(newProvider);
+    setModel(modelConfigs[newProvider].models[0]);
+    onModelSelect(newProvider, modelConfigs[newProvider].models[0]);
+  };
 
-      const data = await response.json();
-      if (data.isValid) {
-        toast.success(`${modelConfigs[provider].name} API key saved successfully`);
-      } else {
-        toast.error(`Invalid ${modelConfigs[provider].name} API key`);
-      }
-    } catch (error) {
-      toast.error('Failed to validate API key');
-    }
+  const handleModelChange = (newModel: string) => {
+    setModel(newModel);
+    onModelSelect(provider, newModel);
   };
 
   return (
-    <div className="relative">
-      <motion.button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-accent-midnight border border-accent-violet/20 text-text-light"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-      >
-        <span>{modelConfigs[currentProvider].name} - {currentModel}</span>
-        <svg
-          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </motion.button>
-
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="absolute z-10 mt-2 w-64 rounded-lg bg-accent-midnight border border-accent-violet/20 shadow-lg"
-        >
-          {Object.entries(modelConfigs).map(([provider, config]) => (
-            <div key={provider} className="p-2">
-              <div className="text-sm font-medium text-text-light px-3 py-2">
-                {config.name} {config.paid && <span className="text-primary-violet">(Paid)</span>}
-              </div>
-              {config.models.map((model) => (
-                <button
-                  key={model}
-                  onClick={() => {
-                    onModelChange(provider as ModelProvider, model);
-                    setIsOpen(false);
-                  }}
-                  className={`block w-full text-left px-4 py-2 text-sm ${
-                    currentProvider === provider && currentModel === model
-                      ? 'bg-primary-violet/10 text-primary-violet'
-                      : 'text-text-light hover:bg-accent-violet/10'
-                  }`}
-                >
-                  {model}
-                </button>
-              ))}
-            </div>
+    <div className="space-y-4 p-4 bg-accent-midnight rounded-lg">
+      <div>
+        <label className="block text-sm font-medium text-text-purple mb-2">
+          Select AI Provider
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {Object.entries(modelConfigs).map(([key, config]) => (
+            <motion.button
+              key={key}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleProviderChange(key as ModelProvider)}
+              className={`p-2 rounded-lg text-sm ${
+                provider === key 
+                  ? 'bg-primary-violet text-white' 
+                  : 'bg-accent-violet/20 text-text-purple'
+              }`}
+            >
+              {config.name}
+            </motion.button>
           ))}
-        </motion.div>
-      )}
+        </div>
+      </div>
 
-      <motion.button
-        onClick={() => setShowApiKeys(!showApiKeys)}
-        className="mt-4 px-4 py-2 text-sm text-text-purple hover:text-text-light"
-      >
-        Manage API Keys
-      </motion.button>
-
-      {showApiKeys && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-2 p-4 bg-accent-midnight rounded-lg border border-accent-violet/20"
+      <div>
+        <label className="block text-sm font-medium text-text-purple mb-2">
+          Select Model
+        </label>
+        <select
+          value={model}
+          onChange={(e) => handleModelChange(e.target.value)}
+          className="w-full bg-accent-midnight border border-accent-violet/20 rounded-lg px-4 py-2 text-text-light"
         >
-          <ApiKeyManager onKeySave={handleApiKeySave} />
-        </motion.div>
-      )}
+          {modelConfigs[provider].models.map((modelName) => (
+            <option key={modelName} value={modelName}>
+              {modelName}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 } 
