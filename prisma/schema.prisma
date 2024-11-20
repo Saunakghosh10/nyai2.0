@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SavedDraft {
+  id         String         @id @default(cuid())
+  userId     String
+  templateId String
+  formData   Json
+  lastSaved  DateTime       @default(now())
+  versions   DraftVersion[]
+
+  @@unique([userId, templateId])
+}
+
+model DraftVersion {
+  id         String     @id @default(cuid())
+  draftId    String
+  content    String?
+  formData   Json
+  status     String     @default("draft")
+  version    Int
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  draft      SavedDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId])
+}
+
+model ConsultSession {
+  id         String           @id @default(cuid())
+  userId     String
+  topic      String
+  status     String          @default("active")
+  startTime  DateTime        @default(now())
+  endTime    DateTime?
+  summary    String?
+  messages   ConsultMessage[]
+  expertise  ExpertiseArea[]
+  videoSessions VideoSession[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([userId])
+}
+
+model ConsultMessage {
+  id          String         @id @default(cuid())
+  sessionId   String
+  content     String
+  role        String
+  timestamp   DateTime
+  attachments String[]
+  session     ConsultSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model ExpertiseArea {
+  id          String           @id @default(cuid())
+  name        String
+  description String
+  topics      String[]
+  sessions    ConsultSession[]
+}
+
+model VideoSession {
+  id            String         @id @default(cuid())
+  consultId     String
+  roomId        String        @unique
+  status        String        @default("waiting") // waiting, active, ended
+  startTime     DateTime?
+  endTime       DateTime?
+  participants  Participant[]
+  recording     String?
+  consultation  ConsultSession @relation(fields: [consultId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([consultId])
+}
+
+model Participant {
+  id            String       @id @default(cuid())
+  sessionId     String
+  userId        String
+  role          String      // expert, client
+  joinedAt      DateTime    @default(now())
+  leftAt        DateTime?
+  videoSession  VideoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model Document {
+  id            String    @id @default(cuid())
+  userId        String
+  name          String
+  content       String?   @db.Text
+  fileUrl       String?   // Add this field to store the file URL
+  fileType      String
+  uploadedAt    DateTime  @default(now())
+  lastAccessed  DateTime  @default(now())
+  status        String    @default("active")
+
+  @@index([userId])
+} 
