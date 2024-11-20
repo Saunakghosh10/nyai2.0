@@ -19,3 +19,5 @@
 # Other files
 .DS_Store
 *.pem
+.vercel
+.env*.local

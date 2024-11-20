@@ -102,11 +102,23 @@ model Document {
   userId        String
   name          String
   content       String?   @db.Text
-  fileUrl       String?   // Add this field to store the file URL
+  fileUrl       String?
   fileType      String
+  size          Int
   uploadedAt    DateTime  @default(now())
   lastAccessed  DateTime  @default(now())
   status        String    @default("active")
 
   @@index([userId])
+}
+
+model ApiKey {
+  userId        String
+  provider      String
+  encryptedKey  String
+  iv            String
+  tag           String
+  lastValidated DateTime
+
+  @@id([userId, provider])
 } 

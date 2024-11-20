@@ -8,6 +8,9 @@ import SimplePDFViewer from "@/components/declutter/SimplePDFViewer";
 import { validateFile } from '@/utils/fileProcessing';
 import { toast } from 'react-hot-toast';
 import { pdfjs } from 'react-pdf';
+import ModelSelector from "@/components/shared/ModelSelector";
+import ApiKeyManager from "@/components/shared/ApiKeyManager";
+import { ModelProvider } from '@/utils/modelConfig';
 
 // Initialize PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
@@ -20,6 +23,8 @@ export default function DeclutterPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<ModelProvider>('openai');
+  const [selectedModel, setSelectedModel] = useState('gpt-4');
 
   // Add useEffect to fetch existing document
   useEffect(() => {
@@ -141,6 +146,16 @@ export default function DeclutterPage() {
     fileInputRef.current?.click();
   };
 
+  const handleModelSelect = (provider: ModelProvider, model: string) => {
+    setSelectedProvider(provider);
+    setSelectedModel(model);
+  };
+
+  const handleApiKeySave = (provider: ModelProvider, key: string) => {
+    // Store the API key in localStorage or your preferred storage method
+    localStorage.setItem(`${provider}_api_key`, key);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary-black to-accent-midnight py-12">
       <motion.div
@@ -166,6 +181,21 @@ export default function DeclutterPage() {
           >
             Upload your document and let AI simplify it for you
           </motion.p>
+        </div>
+
+        <div className="mb-8">
+          <ModelSelector 
+            onModelSelect={handleModelSelect}
+            selectedProvider={selectedProvider}
+            selectedModel={selectedModel}
+          />
+        </div>
+        
+        <div className="mb-8">
+          <ApiKeyManager 
+            onKeySave={handleApiKeySave}
+            selectedProvider={selectedProvider}
+          />
         </div>
 
         {!file ? (

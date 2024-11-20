@@ -3,75 +3,104 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FiEye, FiEyeOff, FiSave } from 'react-icons/fi';
-import { modelConfigs, ModelProvider } from '@/utils/modelProvider';
+import { modelConfigs, ModelProvider } from '@/utils/modelConfig';
+import toast from 'react-hot-toast';
 
 interface ApiKeyManagerProps {
   onKeySave: (provider: ModelProvider, key: string) => void;
+  selectedProvider?: ModelProvider;
 }
 
-export default function ApiKeyManager({ onKeySave }: ApiKeyManagerProps) {
+export default function ApiKeyManager({ onKeySave, selectedProvider }: ApiKeyManagerProps) {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [isValidating, setIsValidating] = useState<Record<string, boolean>>({});
+  const [lastValidated, setLastValidated] = useState<Record<string, Date>>({});
 
   useEffect(() => {
-    // Load saved keys from localStorage
-    const savedKeys = localStorage.getItem('api_keys');
-    if (savedKeys) {
-      setKeys(JSON.parse(savedKeys));
-    }
-  }, []);
+    // Check key validation status periodically
+    const interval = setInterval(async () => {
+      const providers = selectedProvider ? [selectedProvider] : Object.keys(modelConfigs);
+      for (const provider of providers) {
+        const lastCheck = lastValidated[provider];
+        if (lastCheck && Date.now() - lastCheck.getTime() > 24 * 60 * 60 * 1000) {
+          // Revalidate keys older than 24 hours
+          handleSaveKey(provider as ModelProvider);
+        }
+      }
+    }, 60 * 60 * 1000); // Check every hour
 
-  const handleSaveKey = (provider: ModelProvider) => {
+    return () => clearInterval(interval);
+  }, [lastValidated, selectedProvider]);
+
+  const handleSaveKey = async (provider: ModelProvider) => {
     const key = keys[provider];
-    if (key) {
-      localStorage.setItem('api_keys', JSON.stringify({ ...keys, [provider]: key }));
-      onKeySave(provider, key);
+    if (!key) {
+      toast.error('Please enter an API key');
+      return;
+    }
+
+    setIsValidating({ ...isValidating, [provider]: true });
+
+    try {
+      const response = await fetch('/api/validate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, token: key }),
+      });
+
+      const data = await response.json();
+      
+      if (data.valid) {
+        onKeySave(provider, key);
+        setLastValidated({ ...lastValidated, [provider]: new Date() });
+        toast.success(`${modelConfigs[provider].name} API key saved successfully`);
+      } else {
+        toast.error(`Invalid ${modelConfigs[provider].name} API key`);
+      }
+    } catch (error) {
+      console.error('API key validation error:', error);
+      toast.error('Failed to validate API key');
+    } finally {
+      setIsValidating({ ...isValidating, [provider]: false });
     }
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-medium text-text-light">API Keys</h3>
-      {Object.entries(modelConfigs)
-        .filter(([_, config]) => config.requiresKey)
-        .map(([provider, config]) => (
-          <motion.div
-            key={provider}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-accent-midnight/50 p-4 rounded-lg border border-accent-violet/20"
-          >
-            <label className="block text-sm font-medium text-text-light mb-2">
-              {config.name} API Key
-            </label>
-            <div className="flex space-x-2">
-              <div className="relative flex-1">
-                <input
-                  type={showKeys[provider] ? 'text' : 'password'}
-                  value={keys[provider] || ''}
-                  onChange={(e) => setKeys({ ...keys, [provider]: e.target.value })}
-                  className="w-full bg-accent-midnight border border-accent-violet/20 rounded-lg px-4 py-2 text-text-light focus:outline-none focus:border-primary-violet"
-                  placeholder={`Enter your ${config.name} API key`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKeys({ ...showKeys, [provider]: !showKeys[provider] })}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-purple hover:text-text-light"
-                >
-                  {showKeys[provider] ? <FiEyeOff /> : <FiEye />}
-                </button>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleSaveKey(provider as ModelProvider)}
-                className="px-4 py-2 bg-primary-violet text-white rounded-lg hover:bg-accent-violet transition-colors"
+    <div className="space-y-4 p-4 bg-accent-midnight rounded-lg">
+      {(selectedProvider ? [selectedProvider] : Object.keys(modelConfigs)).map((provider) => (
+        <div key={provider} className="space-y-2">
+          <label className="block text-sm font-medium text-text-purple">
+            {modelConfigs[provider as ModelProvider].name} API Key
+          </label>
+          <div className="flex space-x-2">
+            <div className="relative flex-1">
+              <input
+                type={showKeys[provider] ? 'text' : 'password'}
+                value={keys[provider] || ''}
+                onChange={(e) => setKeys({ ...keys, [provider]: e.target.value })}
+                className="w-full bg-accent-midnight border border-accent-violet/20 rounded-lg px-4 py-2 text-text-light"
+                placeholder={`Enter your ${modelConfigs[provider as ModelProvider].name} API key`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKeys({ ...showKeys, [provider]: !showKeys[provider] })}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-purple hover:text-text-light"
               >
-                <FiSave className="h-5 w-5" />
-              </motion.button>
+                {showKeys[provider] ? <FiEyeOff /> : <FiEye />}
+              </button>
             </div>
-          </motion.div>
-        ))}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleSaveKey(provider as ModelProvider)}
+              className="px-4 py-2 bg-primary-violet text-white rounded-lg hover:bg-accent-violet"
+            >
+              <FiSave className="h-5 w-5" />
+            </motion.button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 } 
