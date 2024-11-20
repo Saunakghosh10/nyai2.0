@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Build files
+/.next/
+/out/
+/build
+
+# Other files
+.DS_Store
+*.pem
