@@ -21,3 +21,4 @@
 *.pem
 .vercel
 .env*.local
+.env.example
