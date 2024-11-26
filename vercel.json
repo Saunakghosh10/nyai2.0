@@ -1,11 +1,17 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["iad1"],
+  "builds": [
+    {
+      "src": "next.config.js",
+      "use": "@vercel/next"
+    }
+  ],
   "env": {
+    "NODE_ENV": "production",
     "NEXT_PUBLIC_APP_URL": "${VERCEL_URL}",
     "DATABASE_URL": "${env.DATABASE_URL}",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "${env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}",

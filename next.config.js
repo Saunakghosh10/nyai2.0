@@ -20,7 +20,6 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
-  // Specify which routes should use Edge Runtime
   async headers() {
     return [
       {
@@ -34,19 +33,18 @@ const nextConfig = {
       },
     ];
   },
-  // Optimize production build
   swcMinify: true,
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   poweredByHeader: false,
-  // Handle PDF.js and canvas dependencies
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Don't attempt to require canvas on the client side
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        canvas: false,
+        fs: false,
+        net: false,
+        tls: false,
         encoding: false,
       };
     }
