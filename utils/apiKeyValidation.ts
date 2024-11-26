@@ -1,6 +1,5 @@
 import { ModelProvider } from './modelConfig';
 import OpenAI from 'openai';
-import Replicate from 'replicate';
 import { HfInference } from '@huggingface/inference';
 
 export class ApiKeyValidator {
@@ -16,13 +15,16 @@ export class ApiKeyValidator {
   }
 
   static async validateReplicate(apiKey: string): Promise<boolean> {
-    const replicate = new Replicate({ auth: apiKey });
     try {
-      await replicate.models.list();
-      return true;
-    } catch (error: any) {
-      if (error.message.includes('unauthorized')) return false;
-      throw error;
+      const response = await fetch('https://api.replicate.com/v1/models', {
+        headers: {
+          'Authorization': `Token ${apiKey}`,
+        },
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Replicate validation error:', error);
+      return false;
     }
   }
 
@@ -32,22 +34,27 @@ export class ApiKeyValidator {
       await hf.textGeneration({
         model: 'gpt2',
         inputs: 'test',
-        parameters: { max_length: 5 }
+        parameters: {
+          max_new_tokens: 1,
+        },
       });
       return true;
     } catch (error: any) {
-      if (error.message.includes('unauthorized')) return false;
+      if (error.status === 401) return false;
       throw error;
     }
   }
 
-  static async validate(provider: ModelProvider, apiKey: string): Promise<boolean> {
-    const validators = {
-      openai: this.validateOpenAI,
-      replicate: this.validateReplicate,
-      huggingface: this.validateHuggingFace
-    };
-
-    return await validators[provider](apiKey);
+  async validateKey(provider: string, key: string): Promise<boolean> {
+    switch (provider.toLowerCase()) {
+      case 'openai':
+        return ApiKeyValidator.validateOpenAI(key);
+      case 'replicate':
+        return ApiKeyValidator.validateReplicate(key);
+      case 'huggingface':
+        return ApiKeyValidator.validateHuggingFace(key);
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
   }
-} 
+}

@@ -1,17 +1,15 @@
-import Replicate from 'replicate';
 import { sleep } from './helpers';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
 class ReplicateService {
-  private replicate: Replicate;
+  private apiToken: string;
   private rateLimitDelay: number = 0;
+  private modelVersion = "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3";
 
   constructor() {
-    this.replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN || '',
-    });
+    this.apiToken = process.env.REPLICATE_API_TOKEN || '';
   }
 
   async generateResponse(message: string, context: string, retryCount = 0): Promise<string> {
@@ -21,62 +19,93 @@ class ReplicateService {
         await sleep(this.rateLimitDelay);
       }
 
-      const output = await this.replicate.run(
-        "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
-        {
+      const response = await fetch('https://api.replicate.com/v1/predictions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${this.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: this.modelVersion,
           input: {
             prompt: `${context}\n\nQuestion: ${message}\n\nProvide a complete response that ends naturally with a period or appropriate punctuation mark. Do not cut off mid-sentence.\n\nAnswer:`,
-            max_new_tokens: 500,
-            temperature: 0.7,
+            max_length: 500,
+            temperature: 0.75,
             top_p: 0.9,
-            repetition_penalty: 1.1,
             system_prompt: "You are a helpful AI assistant. Always provide complete responses that end naturally."
-          }
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429 && retryCount < MAX_RETRIES) {
+          this.rateLimitDelay += RETRY_DELAY;
+          await sleep(RETRY_DELAY);
+          return this.generateResponse(message, context, retryCount + 1);
         }
-      );
-
-      if (!output) {
-        throw new Error('Empty response from model');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      let response = Array.isArray(output) ? output.join('') : String(output);
-      return this.cleanResponse(response);
+      const prediction = await response.json();
+      
+      // Poll for completion
+      const result = await this.pollForCompletion(prediction.id);
+      let cleaned = result.output
+        .replace(/^(Assistant:|AI:|Response:|Answer:)/i, '')
+        .replace(/^[\s\n]+/, '')
+        .replace(/I apologize|As an AI|I'm an AI|I cannot|I don't have|Please note/gi, '')
+        .trim();
 
-    } catch (error: any) {
-      console.error('Replicate API Error:', error);
-
-      // Handle rate limiting
-      if (error.status === 429 && retryCount < MAX_RETRIES) {
-        this.rateLimitDelay = (retryCount + 1) * RETRY_DELAY;
-        await sleep(this.rateLimitDelay);
-        return this.generateResponse(message, context, retryCount + 1);
+      if (!cleaned.match(/[.!?]$/)) {
+        cleaned += '.';
       }
 
-      // Handle other errors
+      return cleaned || 'Sorry, I could not generate a response.';
+
+    } catch (error) {
+      console.error('Error generating response:', error);
       if (retryCount < MAX_RETRIES) {
         await sleep(RETRY_DELAY);
         return this.generateResponse(message, context, retryCount + 1);
       }
-
-      return "I apologize, but I'm having trouble processing your request. Please try again in a moment.";
+      throw error;
     }
   }
 
-  private cleanResponse(response: string): string {
-    let cleaned = response
-      .replace(/^(Assistant:|AI:|Response:|Answer:)/i, '')
-      .replace(/^[\s\n]+/, '')
-      .replace(/I apologize|As an AI|I'm an AI|I cannot|I don't have|Please note/gi, '')
-      .trim();
+  private async pollForCompletion(predictionId: string): Promise<any> {
+    const maxAttempts = 30;
+    let attempts = 0;
 
-    if (!cleaned.match(/[.!?]$/)) {
-      cleaned += '.';
+    while (attempts < maxAttempts) {
+      const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+        headers: {
+          'Authorization': `Token ${this.apiToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const prediction = await response.json();
+
+      if (prediction.status === 'succeeded') {
+        return prediction;
+      }
+
+      if (prediction.status === 'failed') {
+        throw new Error('Prediction failed');
+      }
+
+      await sleep(1000);
+      attempts++;
     }
 
-    return cleaned;
+    throw new Error('Prediction timed out');
   }
 }
 
 const replicateService = new ReplicateService();
+
 export const generateResponse = (message: string, context: string) => 
-  replicateService.generateResponse(message, context); 
+  replicateService.generateResponse(message, context);

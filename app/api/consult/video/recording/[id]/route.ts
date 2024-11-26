@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { prisma } from '@/lib/prisma';
-import { get } from '@vercel/blob';
+import { list } from '@vercel/blob';
 
 export async function GET(
   req: Request,
@@ -27,7 +27,7 @@ export async function GET(
       return new NextResponse("Recording not found", { status: 404 });
     }
 
-    const blob = await get(session.videoSession.recording);
+    const blob = await list(session.videoSession.recording);
     
     return new NextResponse(blob);
 
@@ -38,4 +38,4 @@ export async function GET(
       message: 'Failed to get recording',
     }, { status: 500 });
   }
-} 
+}

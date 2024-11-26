@@ -5,6 +5,8 @@ import { encryptApiKey } from '@/utils/encryption';
 import { auth } from '@clerk/nextjs';
 import { prisma } from '@/lib/prisma';
 
+export const runtime = 'edge';
+
 export async function POST(req: Request) {
   try {
     // Check rate limit
@@ -18,17 +20,23 @@ export async function POST(req: Request) {
 
     const { provider, token } = await req.json();
 
-    // Validate the API key
-    const isValid = await ApiKeyValidator.validate(provider, token);
-    if (!isValid) {
-      return NextResponse.json({ valid: false }, { status: 400 });
+    if (!provider || !token) {
+      return NextResponse.json({ error: 'Missing provider or token' }, { status: 400 });
     }
 
-    // Encrypt the API key before storing
-    const { encryptedData, iv, tag } = encryptApiKey(token);
+    // Validate the API key
+    const validator = new ApiKeyValidator();
+    const isValid = await validator.validateKey(provider, token);
 
-    // Store or update the encrypted API key
-    await prisma.apiKey.upsert({
+    if (!isValid) {
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 400 });
+    }
+
+    // Encrypt the API key
+    const encryptedKey = await encryptApiKey(token);
+
+    // Store or update the API key
+    const apiKey = await prisma.apiKey.upsert({
       where: {
         userId_provider: {
           userId,
@@ -36,27 +44,24 @@ export async function POST(req: Request) {
         },
       },
       update: {
-        encryptedKey: encryptedData,
-        iv,
-        tag,
-        lastValidated: new Date(),
+        key: encryptedKey,
       },
       create: {
         userId,
         provider,
-        encryptedKey: encryptedData,
-        iv,
-        tag,
-        lastValidated: new Date(),
+        key: encryptedKey,
       },
     });
 
-    return NextResponse.json({ valid: true });
+    return NextResponse.json({ 
+      message: 'API key validated and stored successfully',
+      provider: apiKey.provider 
+    });
+
   } catch (error) {
-    console.error('API key validation error:', error);
-    return NextResponse.json(
-      { error: 'Failed to validate API key' },
-      { status: 500 }
-    );
+    console.error('Validate key error:', error);
+    return NextResponse.json({ 
+      error: 'Failed to validate API key' 
+    }, { status: 500 });
   }
-} 
+}

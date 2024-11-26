@@ -17,12 +17,10 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    serverActions: true,
-  },
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    ENABLE_VIDEO_FEATURES: 'false'
   }
 };
 
-module.exports = nextConfig; 
+module.exports = nextConfig;

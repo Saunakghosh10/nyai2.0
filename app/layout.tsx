@@ -6,9 +6,10 @@ import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
-  title: 'NYAI - AI-Powered Document Intelligence',
-  description: 'Transform complex documents into clear insights with AI. Get instant document analysis, smart drafting, and expert consultations all in one platform.',
+export const metadata: Metadata = {
+  title: 'NYAI 2.0',
+  description: 'AI-Powered Productivity Application',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
   keywords: 'AI document analysis, legal tech, document drafting, expert consultation, artificial intelligence',
   openGraph: {
     title: 'NYAI - AI-Powered Document Intelligence',

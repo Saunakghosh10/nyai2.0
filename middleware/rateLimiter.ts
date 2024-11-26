@@ -2,15 +2,27 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { Redis } from '@upstash/redis';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+let redis: Redis | null = null;
+
+if (redisUrl && redisToken) {
+  redis = new Redis({
+    url: redisUrl,
+    token: redisToken,
+  });
+}
 
 const WINDOW_SIZE = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 50; // requests per minute
 
 export async function rateLimiter(req: NextRequest) {
+  // If Redis is not configured, skip rate limiting
+  if (!redis) {
+    return null;
+  }
+
   const ip = req.ip || 'anonymous';
   const key = `rate-limit:${ip}`;
 
@@ -20,7 +32,7 @@ export async function rateLimiter(req: NextRequest) {
     const windowStart = now - WINDOW_SIZE;
 
     // Filter out old requests
-    const recentRequests = requests.filter(time => time > windowStart);
+    const recentRequests = requests.filter(timestamp => timestamp > windowStart);
 
     if (recentRequests.length >= MAX_REQUESTS) {
       return NextResponse.json(
@@ -35,7 +47,8 @@ export async function rateLimiter(req: NextRequest) {
 
     return null;
   } catch (error) {
-    console.error('Rate limiter error:', error);
-    return null; // Allow request on error
+    console.error('Rate limiting error:', error);
+    // On error, allow the request to proceed
+    return null;
   }
-} 
+}
