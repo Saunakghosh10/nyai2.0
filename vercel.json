@@ -12,6 +12,7 @@
   ],
   "env": {
     "NODE_ENV": "production",
+    "PRISMA_GENERATE_DATAPROXY": "true",
     "NEXT_PUBLIC_APP_URL": "${VERCEL_URL}",
     "DATABASE_URL": "${env.DATABASE_URL}",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "${env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}",
