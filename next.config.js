@@ -40,6 +40,18 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   poweredByHeader: false,
+  // Handle PDF.js and canvas dependencies
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Don't attempt to require canvas on the client side
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        canvas: false,
+        encoding: false,
+      };
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;
